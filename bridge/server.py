@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get("BRIDGE_PORT", 8787))  # nur für Tests überschreibbar
 ORIGIN = "https://mircoak.github.io"
-STATIC = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/manifest.json": "manifest.json"}  # nur diese Dateien
+STATIC = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/games.js": "games.js", "/manifest.json": "manifest.json"}  # nur diese Dateien
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json"}
 OLLAMA_MODEL = "qwen2.5:7b"
 WHISPER_MODEL = "large-v3-turbo"

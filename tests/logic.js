@@ -44,4 +44,7 @@ store.bt=JSON.stringify({stats:'kaputt',goal:99});const g2=new Function(src+';re
 assert.equal(g2.stats.turns,0);assert.deepEqual(g2.stats.types,{});assert.equal(g2.goal,5);
 store.bt=JSON.stringify({stats:{turns:-4,retryFixed:'x',types:{a:'y',b:3}},goal:3});const g3=new Function(src+';return S')();
 assert.equal(g3.stats.turns,0);assert.equal(g3.stats.retryFixed,0);assert.deepEqual(g3.stats.types,{b:3});assert.equal(g3.goal,3);
+// Fehlerarten mit Namen von Objekt-Eigenschaften zählen richtig
+m.S.stats.types=Object.create(null);m.noteType('constructor');m.noteType('constructor');m.noteType('__proto__');m.noteType('toString');
+assert.equal(m.S.stats.types.constructor,2);assert.equal(m.S.stats.types.toString,1);assert.equal(Object.keys(m.S.stats.types).length,3);
 console.log('LOGIC_OK');

@@ -20,7 +20,7 @@ if (!S.runs || typeof S.runs !== 'object') S.runs = {};
 if (!S.newToday || typeof S.newToday !== 'object') S.newToday = { d: '', n: 0 };
 // Fortschrittszahlen (nur im Handy): Gespräche, zweite Versuche, Spiele, häufigste Fehlerarten
 const st0 = S.stats && typeof S.stats === 'object' ? S.stats : {};
-S.stats = { turns: 0, retryTries: 0, retryFixed: 0, games: 0, types: {} };
+S.stats = { turns: 0, retryTries: 0, retryFixed: 0, games: 0, types: Object.create(null) };
 for (const k of ['turns', 'retryTries', 'retryFixed', 'games']) if (Number.isFinite(st0[k]) && st0[k] >= 0) S.stats[k] = Math.floor(st0[k]);
 if (st0.types && typeof st0.types === 'object') for (const [k, v] of Object.entries(st0.types)) if (Number.isFinite(v) && v > 0) S.stats.types[String(k).slice(0, 40)] = Math.floor(v);
 if (!Number.isInteger(S.goal) || S.goal < 1 || S.goal > 7) S.goal = 5; // Wochenziel: Übungstage von 7
@@ -29,8 +29,9 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); saveFai
 
 function mark() { if (!S.days.includes(today())) { S.days.push(today()); save(); } }
 const bump = (k, n = 1) => { S.stats[k] += n; save(); };
-const noteType = t => { const k = String(t).slice(0, 40); S.stats.types[k] = (S.stats.types[k] || 0) + 1; save(); };
+const noteType = t => { const k = String(t).slice(0, 40); S.stats.types[k] = (S.stats.types[k] || 0) + 1; save(); }; // types hat keinen Prototyp: "constructor" o. ä. ist ein ganz normaler Schlüssel
 function weekDays() { let n = 0; for (let k = 0; k < 7; k++) if (S.days.includes(inDays(-k))) n++; return n; } // Übungstage der letzten 7 Tage
+const bar = (v, max) => el('div', { class: 'bar' }, el('div', { style: `width:${Math.min(100, Math.round(v / max * 100))}%` }));
 function streak() {
   const d = new Date(); let n = 0;
   if (!S.days.includes(dstr(d))) d.setDate(d.getDate() - 1); // heute noch offen zählt nicht als Abbruch
@@ -170,9 +171,9 @@ function home() {
     el('div', { class: 'streak' }, `🔥 ${streak()} ${streak() === 1 ? 'Tag' : 'Tage'}`),
     el('p', { class: 'mut' }, `${S.deck.length} Satzbausteine gespeichert`),
     ...(saveFailed ? [el('p', { class: 'err' }, 'Achtung: Speichern im Handy ist fehlgeschlagen. Mach eine Sicherung unter Einstellungen.')] : []),
-    el('div', { class: 'mut' }, `Diese Woche: ${weekDays()} von ${S.goal} Tagen`), bar(weekDays(), S.goal),
+    el('div', { class: 'mut' }, `Letzte 7 Tage: ${weekDays()} von ${S.goal} Tagen`), bar(weekDays(), S.goal),
     el('button', { class: 'pri', onclick: review }, `Wiederholen (${due} fällig)`),
-    el('div', { class: 'row' }, el('button', { onclick: games }, 'Mini-Spiele'), el('button', { onclick: progress }, 'Fortschritt')),
+    el('div', { class: 'row' }, el('button', { onclick: () => games() }, 'Mini-Spiele'), el('button', { onclick: () => progress() }, 'Fortschritt')), // erst beim Klick aufrufen: games.js lädt nach app.js
     el('h2', {}, 'Gespräch üben'),
     el('p', { class: 'mut' }, 'Wie schwer soll das Gegenüber sein?'), lv,
     ...SCENARIOS.map(sc => el('button', { onclick: () => session(sc) }, sc.t)),
@@ -299,105 +300,6 @@ function review() {
     setView(() => { recAbort(); speechSynthesis.cancel(); }); // erst NACH show()
   };
   step();
-}
-
-// ---------- Mini-Spiele (je ca. 2 Minuten, freiwillig, ohne Zeitdruck) ----------
-// [deutsch, englisch, englische Kurzdefinition]. Die Definition hilft dem kleinen Prüfmodell, richtig zu urteilen.
-const WORDS = [['Anzahlung', 'down payment', 'money paid in advance, before the work or delivery starts'],
-  ['Rabatt', 'discount', 'a reduction in the normal price'], ['Frist', 'deadline', 'the latest date by which something must be done'],
-  ['Angebot', 'quote', 'a document that states the price you offer for a job'], ['Haftung', 'liability', 'legal responsibility for damage or loss'],
-  ['Kündigung', 'termination', 'officially ending a contract'], ['Zahlungsziel', 'payment term', 'the number of days a customer has to pay an invoice'],
-  ['Mehrkosten', 'additional costs', 'extra costs on top of the agreed price'], ['Rechnung', 'invoice', 'a document asking a customer to pay for goods or services'],
-  ['Vertragsstrafe', 'contractual penalty', 'money that must be paid if a contract rule is broken'], ['Lieferverzug', 'delay in delivery', 'goods or work arrive later than agreed'],
-  ['Preiserhöhung', 'price increase', 'raising the price of something'], ['Verhandlungsspielraum', 'room to negotiate', 'how much both sides can still move on price or terms'],
-  ['Vertragslaufzeit', 'contract duration', 'how long a contract is valid']];
-const OBJECTIONS = ["That's too expensive for us.", 'We already work with another provider.', "We don't have the budget this quarter.",
-  'Can you do it faster?', 'I need to discuss this with my team first.', 'Why should we choose you?',
-  'Your competitor offers the same for less.', "We can't pay upfront."];
-const pick = (arr, n = 1) => [...arr].sort(() => Math.random() - .5).slice(0, n);
-const backTo = fn => el('button', { class: 'back', onclick: fn }, '← Zurück');
-const bar = (v, max) => el('div', { class: 'bar' }, el('div', { style: `width:${Math.min(100, Math.round(v / max * 100))}%` }));
-const gameView = (...n) => { show(...n); setView(() => { recAbort(); speechSynthesis.cancel(); }); }; // Aufräumen NACH show()
-
-function games() {
-  gameView(back(), el('h1', {}, 'Mini-Spiele'), el('p', { class: 'mut' }, 'Je ca. 2 Minuten, freiwillig, ohne Zeitdruck.'),
-    el('button', { onclick: gameCirc }, 'Wort umschreiben: Dir fehlt ein Wort? Erkläre es.'),
-    el('button', { onclick: gameFrame }, 'Lückensatz sprechen: Satzrahmen mit eigenem Inhalt füllen'),
-    el('button', { onclick: gameBlitz }, 'Einwand-Blitzrunde: 3 Einwände, du antwortest'));
-}
-
-function gameCirc() {
-  const [de, en, def] = pick(WORDS)[0];
-  const res = el('div', { class: 'mut' }), reveal = el('div'), btn = el('button', { class: 'big' });
-  micButton(btn, '● Umschreiben', '■ Fertig', {
-    text: async t => {
-      if (!t) { res.textContent = 'Nichts verstanden. Nochmal.'; return; }
-      if (words(t).join(' ').includes(words(en).join(' '))) { res.textContent = `Versuch es ohne das Wort selbst ("${en}").`; return; }
-      const c = await api('/circ', { de, en, def, text: t }, false, 60000);
-      bump('games'); mark();
-      // Das kleine Prüfmodell irrt sich oft. Nur ein Lob wird angezeigt, sonst kein Urteil, nur die Definition zum Vergleichen.
-      res.textContent = c.ok === true ? `✓ ${c.comment}` : 'Danke fürs Erklären. Vergleiche mit der Definition unten.';
-      reveal.replaceChildren(`Gesucht war: ${en} `, speakBtn(en), el('div', { class: 'mut' }, `Definition: ${def}`), el('div', {}, el('button', { class: 'sm', onclick: gameCirc }, 'Nächstes Wort')));
-    },
-    error: e => { res.textContent = 'Fehler: ' + e.message; }
-  });
-  gameView(backTo(games), el('h1', {}, 'Wort umschreiben'),
-    el('p', { class: 'mut' }, 'Erkläre auf Englisch, was gemeint ist, ohne das Wort selbst zu sagen:'), el('div', { class: 'en' }, de), res, reveal, btn);
-}
-
-function gameFrame() {
-  const frames = S.deck.filter(c => c.en.includes('...'));
-  if (!frames.length) return gameView(backTo(games), el('h1', {}, 'Lückensatz sprechen'), el('p', {}, 'Noch keine Satzrahmen. Übe zuerst ein Gespräch, dort sammelt die App sie.'));
-  const c = pick(frames)[0], res = el('div', { class: 'mut' }), next = el('div'), btn = el('button', { class: 'big' });
-  micButton(btn, '● Sprechen', '■ Fertig', {
-    text: async t => {
-      if (!t) { res.textContent = 'Nichts verstanden. Nochmal.'; return; }
-      bump('games'); mark();
-      res.textContent = matches(c.en, t) ? `✓ Rahmen getroffen: "${t}"` : `Noch nicht ganz. Du sagtest: "${t}". Rahmen: "${c.en}"`;
-      next.replaceChildren(el('button', { class: 'sm', onclick: gameFrame }, 'Nächster Satz'));
-    },
-    error: e => { res.textContent = 'Fehler: ' + e.message; }
-  });
-  gameView(backTo(games), el('h1', {}, 'Lückensatz sprechen'), el('p', { class: 'mut' }, 'Sprich den ganzen Satz. Die Lücken füllst du mit deinem eigenen Inhalt:'),
-    el('div', {}, c.de), el('div', { class: 'en' }, c.en.replace(/\.\.\./g, '___')), res, next, btn);
-}
-
-function gameBlitz() {
-  const qs = pick(OBJECTIONS, 3); let i = 0;
-  const box = el('div'), res = el('div', { class: 'mut' }), btn = el('button', { class: 'big' });
-  const ask = () => { box.replaceChildren(el('div', { class: 'mut' }, `Einwand ${i + 1} von 3`), el('div', { class: 'en' }, qs[i]), speakBtn(qs[i])); say(qs[i]); };
-  micButton(btn, '● Antworten', '■ Fertig', {
-    text: async t => {
-      if (!t) { res.textContent = 'Nichts verstanden. Nochmal.'; return; }
-      if (words(t).length < 6) { res.textContent = `Kurz. Versuch einen ganzen Satz, zum Beispiel "I understand …, but …" oder "What if we …?" Du sagtest: "${t}"`; return; }
-      res.textContent = `✓ Du hast geantwortet: "${t}"`;
-      if (++i < 3) return ask();
-      bump('games'); mark(); btn.style.display = 'none';
-      box.replaceChildren(el('div', { class: 'en' }, 'Geschafft: 3 von 3 Einwänden beantwortet.'), el('button', { class: 'sm', onclick: gameBlitz }, 'Nochmal'));
-    },
-    error: e => { res.textContent = 'Fehler: ' + e.message; }
-  });
-  gameView(backTo(games), el('h1', {}, 'Einwand-Blitzrunde'), el('p', { class: 'mut' }, 'Hier zählt: durchsprechen, nicht perfekt sein. Ein ganzer Satz reicht.'), box, res, btn);
-  ask();
-}
-
-function progress() {
-  const wd = weekDays(), st = S.stats, mastered = S.deck.filter(c => c.box >= 3).length;
-  const top = Object.entries(st.types).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const goal = el('select', { onchange: () => { S.goal = +goal.value; save(); progress(); } },
-    ...[3, 4, 5, 6, 7].map(n => el('option', { value: String(n) }, `${n} Tage pro Woche`)));
-  goal.value = String(S.goal);
-  show(back(), el('h1', {}, 'Fortschritt'),
-    el('h2', {}, 'Diese Woche'), el('div', { class: 'streak' }, `${wd} von ${S.goal} Tagen`), bar(wd, S.goal), el('p', { class: 'mut' }, 'Wochenziel:'), goal,
-    el('h2', {}, 'Insgesamt'),
-    el('div', {}, `🔥 Tage in Folge: ${streak()}`),
-    el('div', {}, `Gesprochene Antworten im Gespräch: ${st.turns}`),
-    el('div', {}, `Zweiter Versuch geglückt: ${st.retryFixed} von ${st.retryTries}`),
-    el('div', {}, `Mini-Spiele gespielt: ${st.games}`),
-    el('div', {}, `Satzbausteine sicher (Stufe 3 oder höher): ${mastered} von ${S.deck.length}`),
-    el('h2', {}, 'Daran arbeitest du am meisten'),
-    ...(top.length ? top.map(([k, v]) => el('div', {}, `${k}: ${v}×`)) : [el('div', { class: 'mut' }, 'Noch zu wenig Daten.')]),
-    el('p', { class: 'mut' }, 'Das ist nur dein eigener Verlauf, kein Vergleich. Einzelne ruhige Tage sind normal, die Woche zählt.'));
 }
 
 function settings() {
