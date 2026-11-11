@@ -32,4 +32,8 @@ const per={};m.S.deck.forEach(c=>per[c.due]=(per[c.due]||0)+1);assert(Object.val
 assert.equal(m.fixDeck([{de:'a',en:'b',box:-5}])[0].box,0);assert.equal(m.fixDeck([{de:'a',en:'b',box:99}])[0].box,6);
 // defekter Typ für bridge/token
 store.bt=JSON.stringify({bridge:{x:1},token:5});assert.equal(new Function(src+';return S')().bridge,'');
+// Zahlwörter zusammengesetzt
+assert(m.matches('The fee is twenty-five euros','the fee is 25 euros'));
+assert(!m.matches('The fee is twenty-five euros','the fee is 20 euros'));
+assert(m.matches('The fee is seventy euros','the fee is 70 euros'));
 console.log('LOGIC_OK');

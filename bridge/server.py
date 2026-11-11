@@ -45,6 +45,10 @@ codex_lock = threading.Lock()  # ponytail: ein Feedback gleichzeitig; mehr nöti
 log_lock = threading.Lock()
 
 
+class UserError(Exception):
+    """Eigene, absichtlich freundliche Meldung. Alle anderen Fehler gehen nur ins Fenster der Brücke."""
+
+
 def log(kind, **kw):
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     with log_lock, open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -120,7 +124,7 @@ Return ONLY a JSON object, no markdown:
  "note": "one short German sentence about their biggest sentence-structure problem, or empty"}}
 Rules: max 3 gaps, max 2 chunks (the most useful sentence frames, not single words). If the utterance is already good, set "focus" to null."""
     if not codex_lock.acquire(timeout=30):
-        raise RuntimeError("Feedback gerade ausgelastet, gleich nochmal.")
+        raise UserError("Feedback gerade ausgelastet, gleich nochmal.")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             out = os.path.join(tmp, "out.txt")
@@ -134,7 +138,7 @@ Rules: max 3 gaps, max 2 chunks (the most useful sentence frames, not single wor
                                input=prompt, text=True, encoding="utf-8", cwd=tmp, timeout=100, capture_output=True)
             if not os.path.exists(out):
                 print("Codex-Fehler:", (r.stderr or r.stdout)[-600:])  # Details nur im Brücken-Fenster
-                raise RuntimeError("Feedback-Dienst (ChatGPT/Codex) nicht verfügbar. Ist Codex noch angemeldet?")
+                raise UserError("Feedback-Dienst (ChatGPT/Codex) nicht verfügbar. Ist Codex noch angemeldet?")
             raw = open(out, encoding="utf-8").read().strip()
     finally:
         codex_lock.release()
@@ -248,7 +252,7 @@ class H(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError, AttributeError) as e:  # kaputte Anfrage oder unbrauchbare Modellantwort
             print("Ungültig:", repr(e))
             self._send(400, {"error": "Ungültige Anfrage oder unbrauchbare Modellantwort. Nochmal versuchen."})
-        except RuntimeError as e:  # eigene, absichtlich freundliche Meldungen
+        except UserError as e:
             self._send(503, {"error": str(e)})
         except Exception:
             traceback.print_exc()  # Details nur im Brücken-Fenster, nicht zum Client

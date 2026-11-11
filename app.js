@@ -101,8 +101,8 @@ function micButton(btn, idleText, recText, h) {
       micOwner = me; set('starting');
       try { await recStart(); set('recording'); } catch (e) { free(); set('idle'); if (e.message !== 'abgebrochen') h.error(e); }
     } else if (st === 'recording') {
-      set('busy');
-      try { await h.text((await stt(await recStop())).trim()); } catch (e) { h.error(e); } finally { free(); set('idle'); }
+      set('busy'); const my = epoch; // epoch ändert sich beim Verlassen der Ansicht: dann kein Handler mehr (kein Feedback, keine Karten)
+      try { const text = (await stt(await recStop())).trim(); if (my === epoch) await h.text(text); } catch (e) { if (my === epoch) h.error(e); } finally { free(); set('idle'); }
     }
   };
 }
@@ -110,7 +110,7 @@ function micButton(btn, idleText, recText, h) {
 let wake = null, viewId = 0;
 const lockScreen = async () => { // Bildschirm anlassen, solange diese Ansicht offen ist
   const my = viewId;
-  try { const w = await navigator.wakeLock.request('screen'); if (my !== viewId) { w.release(); return; } wake = w; } catch {}
+  try { const w = await navigator.wakeLock.request('screen'); if (my !== viewId) { w.release(); return; } wake = w; w.addEventListener('release', () => { if (wake === w) wake = null; }); } catch {}
 };
 const unlockScreen = () => { try { wake && wake.release(); } catch {} wake = null; };
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && wake === null && lockWanted) lockScreen(); });
@@ -242,8 +242,11 @@ function session(sc, opts = {}) {
   }).catch(e => { if (alive) { fail(e); btn.disabled = false; } });
 }
 
-const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, hundred: 100 };
-const words = s => s.toLowerCase().replace(/[’‘`´]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean).map(w => (w in NUM ? String(NUM[w]) : w));
+const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100 };
+const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const ONES = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const TENS_ONES = /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[\s-](one|two|three|four|five|six|seven|eight|nine)\b/g;
+const words = s => s.toLowerCase().replace(TENS_ONES, (_, t, o) => String(TENS[t] + ONES.indexOf(o) + 1)).replace(/[’‘`´]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean).map(w => (w in NUM ? String(NUM[w]) : w));
 // ponytail: milde Wortprüfung. Ignoriert Reihenfolge und Bedeutung, andere richtige Formulierungen können durchfallen.
 // Darum nur ein Hinweis, die Selbstbewertung entscheidet. Zahlen müssen stimmen, sonst zählt "15" statt "50" als richtig.
 function matches(en, said) {
