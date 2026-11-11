@@ -4,7 +4,7 @@ src=src.replace(/\nhome\(\);\s*$/,'\n');
 const store={};global.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v}};
 global.document={addEventListener(){},visibilityState:'visible',querySelector:()=>({replaceChildren(){}}),createElement:()=>({append(){},setAttribute(){},classList:{toggle(){}}})};
 global.window={scrollTo(){}};global.speechSynthesis={cancel(){}};global.location={hostname:'x',origin:'o'};global.navigator={};
-const f=new Function(src+';return {S,streak,saveChunks,matches,fixDeck,mark,today,inDays}');
+const f=new Function(src+';return {S,streak,saveChunks,matches,fixDeck,mark,today,inDays,weekDays,noteType,bump}');
 const m=f();const assert=require('assert');
 // matches
 assert(m.matches('We could reduce ... if you ...','We could reduce the price if you order more'));
@@ -36,4 +36,12 @@ store.bt=JSON.stringify({bridge:{x:1},token:5});assert.equal(new Function(src+';
 assert(m.matches('The fee is twenty-five euros','the fee is 25 euros'));
 assert(!m.matches('The fee is twenty-five euros','the fee is 20 euros'));
 assert(m.matches('The fee is seventy euros','the fee is 70 euros'));
+// Fortschritt: Wochentage, Zähler, Fehlerarten, kaputte Statistik im Speicher
+m.S.days=[m.today(),m.inDays(-1),m.inDays(-3),m.inDays(-8)];assert.equal(m.weekDays(),3);
+m.S.stats.types={};m.noteType('vocabulary');m.noteType('vocabulary');m.noteType('tense');assert.equal(m.S.stats.types.vocabulary,2);
+const t0=m.S.stats.turns;m.bump('turns');assert.equal(m.S.stats.turns,t0+1);
+store.bt=JSON.stringify({stats:'kaputt',goal:99});const g2=new Function(src+';return S')();
+assert.equal(g2.stats.turns,0);assert.deepEqual(g2.stats.types,{});assert.equal(g2.goal,5);
+store.bt=JSON.stringify({stats:{turns:-4,retryFixed:'x',types:{a:'y',b:3}},goal:3});const g3=new Function(src+';return S')();
+assert.equal(g3.stats.turns,0);assert.equal(g3.stats.retryFixed,0);assert.deepEqual(g3.stats.types,{b:3});assert.equal(g3.goal,3);
 console.log('LOGIC_OK');
