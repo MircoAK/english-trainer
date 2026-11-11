@@ -3,3 +3,5 @@
 !.env.example
 token.txt
 __pycache__/
+private/
+bridge/log/
