@@ -25,11 +25,13 @@ const say = t => { speechSynthesis.cancel(); const u = new SpeechSynthesisUttera
 const back = () => el('button', { class: 'back', onclick: home }, '← Zurück');
 
 // ---------- Brücke zum PC ----------
+// Läuft die App von der Brücke selbst (*.ts.net), ist deren Adresse automatisch die eigene.
+const base = () => (S.bridge || (location.hostname.endsWith('.ts.net') ? location.origin : '')).replace(/\/+$/, '');
 async function api(path, body, raw) {
-  if (!S.bridge || !S.token) throw new Error('Brücke nicht eingerichtet. Unter Einstellungen eintragen.');
+  if (!base() || !S.token) throw new Error('Brücke nicht eingerichtet. Unter Einstellungen eintragen.');
   let r;
   try {
-    r = await fetch(S.bridge.replace(/\/$/, '') + path, { method: 'POST', headers: { 'X-Token': S.token, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ? body : JSON.stringify(body) });
+    r = await fetch(base() + path, { method: 'POST', headers: { 'X-Token': S.token, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ? body : JSON.stringify(body) });
   } catch { throw new Error('PC nicht erreichbar. Läuft die Brücke und ist Tailscale an?'); }
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || r.status);
@@ -162,8 +164,8 @@ function settings() {
     el('button', { class: 'pri', onclick: async () => {
       S.bridge = br.value.trim().replace(/\/+$/, ''); S.token = tk.value.trim(); save();
       msg.textContent = 'Teste …';
-      try { const r = await fetch(S.bridge + '/'); msg.textContent = (await r.json()).ok ? 'Gespeichert. PC erreichbar. ✓' : 'Gespeichert, aber komische Antwort.'; }
-      catch (e) { msg.textContent = `Gespeichert, aber Fehler (${e.name}: ${e.message}) bei Adresse "${S.bridge}"`; } // Adresse ist kein Geheimnis, Token wird nie angezeigt
+      try { const r = await fetch(base() + '/health'); msg.textContent = (await r.json()).ok ? 'Gespeichert. PC erreichbar. ✓' : 'Gespeichert, aber komische Antwort.'; }
+      catch (e) { msg.textContent = `Gespeichert, aber Fehler (${e.name}: ${e.message}) bei Adresse "${base()}"`; } // Adresse ist kein Geheimnis, Token wird nie angezeigt
     } }, 'Speichern und testen'),
     el('h2', {}, 'Sicherung'),
     el('button', { onclick: async () => { await navigator.clipboard.writeText(JSON.stringify({ deck: S.deck, days: S.days })); msg.textContent = 'In die Zwischenablage kopiert.'; } }, 'Sicherung kopieren'),

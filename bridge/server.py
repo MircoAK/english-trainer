@@ -6,6 +6,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = 8787
 ORIGIN = "https://mircoak.github.io"
+STATIC = {"/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/manifest.json": "manifest.json"}  # nur diese Dateien
+TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json"}
 OLLAMA_MODEL = "qwen2.5:7b"
 WHISPER_MODEL = "large-v3-turbo"
 def _env():  # .env liegt neben server.py, steht in .gitignore. Zeilen: BRIDGE_TOKEN=...
@@ -102,8 +104,20 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "POST, GET")
         self.end_headers()
 
-    def do_GET(self):
-        self._send(200, {"ok": True})
+    def do_GET(self):  # liefert die App selbst aus: gleiche Adresse wie die Brücke, kein Cross-Origin
+        p = self.path.split("?")[0]
+        if p == "/health":
+            return self._send(200, {"ok": True})
+        f = STATIC.get(p)
+        if not f:
+            return self._send(404, {"error": "unbekannt"})
+        data = open(os.path.join(HERE, "..", f), "rb").read()
+        self.send_response(200)
+        self.send_header("Content-Type", TYPES[os.path.splitext(f)[1]])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         if self.headers.get("X-Token") != TOKEN:
