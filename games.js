@@ -4,19 +4,19 @@
 // ---------- Inhalte ----------
 // [deutsch, englisch, englische Kurzdefinition, zwei Beispiel-Erklärungen]
 const WORDS = [
-  ['Anzahlung', 'down payment', 'money paid in advance, before the work or delivery starts', ["It's money you pay before the work starts.", "It's the first part of the payment, paid in advance."]],
+  ['Anzahlung', 'down payment', 'a part of the total price that is paid in advance', ["It's money you pay before the work starts.", "It's the first part of the payment, paid in advance."]],
   ['Rabatt', 'discount', 'a reduction in the normal price', ["It's when the price is lower than normal.", "It's an amount we take off the price."]],
   ['Frist', 'deadline', 'the latest date by which something must be done', ["It's the last day by which something must be finished.", "It's the date when the work has to be ready."]],
   ['Angebot', 'quote', 'a document that states the price you offer for a job', ["It's a document that shows what we will do and what it costs.", "It's the price we offer for a job, written down."]],
   ['Haftung', 'liability', 'legal responsibility for damage or loss', ['It means who has to pay if something goes wrong.', "It's the legal responsibility for damage or loss."]],
-  ['Kündigung', 'termination', 'officially ending a contract', ["It's when someone officially ends the contract.", "It's a written notice that the contract will stop."]],
+  ['Kündigung', 'termination', 'officially ending a contract', ["It's when someone officially ends the contract.", "It's when a contract ends because one side decides to end it."]],
   ['Zahlungsziel', 'payment term', 'the number of days a customer has to pay an invoice', ["It's how many days the customer has to pay the invoice.", "It's the time you give the customer to pay."]],
-  ['Mehrkosten', 'additional costs', 'extra costs on top of the agreed price', ["It's extra money on top of the agreed price.", "It's costs we did not plan at the beginning."]],
+  ['Mehrkosten', 'additional costs', 'extra costs on top of the agreed price', ["It's extra money on top of the agreed price.", "It's the extra money we have to pay on top of the plan."]],
   ['Rechnung', 'invoice', 'a document asking a customer to pay for goods or services', ["It's a document that asks the customer to pay.", "It's what we send after the work is done to get our money."]],
   ['Vertragsstrafe', 'contractual penalty', 'money that must be paid if a contract rule is broken', ["It's money you must pay if you break a rule in the contract.", "It's a fine for not keeping the agreement."]],
-  ['Lieferverzug', 'delay in delivery', 'goods or work arrive later than agreed', ["It's when the delivery comes later than agreed.", 'It means the goods are late.']],
+  ['Lieferverzug', 'delay in delivery', 'goods are delivered, or work is completed, later than agreed', ["It's when the delivery comes later than agreed.", 'It means the goods are late.']],
   ['Preiserhöhung', 'price increase', 'raising the price of something', ["It's when something becomes more expensive.", "It's when we raise the price."]],
-  ['Verhandlungsspielraum', 'room to negotiate', 'how much both sides can still move on price or terms', ["It's how much we can still change the price or terms.", "It's the space both sides have to move."]],
+  ['Verhandlungsspielraum', 'room to negotiate', 'how much both sides can still move on price or terms', ["It's how much we can still change the price or terms.", "It's how much each side can change its position."]],
   ['Vertragslaufzeit', 'contract duration', 'how long a contract is valid', ["It's how long the contract is valid.", "It's the period from the start until the end of the contract."]]
 ];
 
@@ -25,29 +25,29 @@ const FRAMES = [
   ['Du willst einen Rabatt gegen eine Gegenleistung anbieten', 'We could offer a discount if you ...', 'Bedingter Rabatt: Du gibst etwas, wenn der andere etwas gibt. Das wirkt freundlich und fest zugleich.', 'We could offer a 5% discount if you confirm the order this week.'],
   ['Du erklärst, dass etwas nicht im Angebot enthalten ist', 'That would be outside the scope of ...', 'Höfliche Grenze: Nicht "nein", sondern "das gehört nicht dazu".', 'That would be outside the scope of our current agreement, but I can send a separate quote.'],
   ['Du bietest nach einem Nein eine Alternative an', 'What I can offer instead is ...', 'Nach einem Nein sofort eine Alternative nennen, damit das Gespräch weitergeht.', 'What I can offer instead is a smaller package at a lower price.'],
-  ['Du zeigst Verständnis, bevor du widersprichst', 'I understand your concern, but ...', 'Erst Verständnis, dann dein Punkt. Der andere fühlt sich gehört und hört dir danach besser zu.', 'I understand your concern, but the price reflects the quality we deliver.'],
+  ['Du zeigst Verständnis, bevor du widersprichst', 'I understand your concern, but ...', 'Erst Verständnis, dann dein Punkt. Der andere fühlt sich gehört, das hilft meistens.', 'I understand your concern, but the price reflects the quality we deliver.'],
   ['Du fragst nach einem Zugeständnis', 'Would you be open to ... if we ...?', 'Eine weiche Frage statt einer Forderung. "Wären Sie offen für ..., wenn wir ...?"', 'Would you be open to a longer contract if we lower the monthly fee?'],
   ['Du schlägst einen Kompromiss vor', 'How about we meet in the middle at ...?', 'Der Klassiker für Kompromisse bei Preis oder Termin.', 'How about we meet in the middle at 8,000 euros?'],
-  ['Du brauchst Zeit zum Prüfen', 'I need to check ... and get back to you by ...', 'Zeit gewinnen, ohne unsicher zu wirken: Nenne immer einen Zeitpunkt.', 'I need to check the details with my team and get back to you by Friday.'],
+  ['Du brauchst Zeit zum Prüfen', 'I need to check ... and get back to you by ...', 'Zeit gewinnen, ohne unsicher zu wirken: Nenne am besten einen Zeitpunkt.', 'I need to check the details with my team and get back to you by Friday.'],
   ['Du bestätigst am Ende, was vereinbart wurde', 'Just to confirm, we agreed that ...', 'Eine Zusammenfassung am Ende vermeidet Missverständnisse.', 'Just to confirm, we agreed that delivery is in March and payment is within 30 days.'],
   ['Du bittest um Klärung', 'Could you clarify what you mean by ...?', 'Nachfragen ist stark, nicht schwach. So bekommst du die Details.', 'Could you clarify what you mean by "flexible payment"?'],
   ['Du lehnst höflich ab', 'Unfortunately, we are not able to ... because ...', 'Ein höfliches Nein mit Grund. Der Grund macht es leichter anzunehmen.', 'Unfortunately, we are not able to start before May because our team is fully booked.'],
   ['Du stimmst unter einer Bedingung zu', 'We could agree to that, provided that ...', 'Zustimmung mit Bedingung: "unter der Voraussetzung, dass".', 'We could agree to that, provided that the payment is made upfront.'],
   ['Du erklärst den Nutzen', 'The main benefit for you would be ...', 'Verhandeln heißt Nutzen zeigen, nicht nur den Preis nennen.', 'The main benefit for you would be a faster delivery time.'],
-  ['Du bittest um mehr Zeit oder Budget', 'Would it be possible to extend ... by ...?', 'Eine höfliche Bitte um mehr Zeit oder Budget.', 'Would it be possible to extend the deadline by two weeks?'],
+  ['Du bittest um mehr Zeit, zum Beispiel eine längere Frist', 'Would it be possible to extend ... by ...?', 'Eine höfliche Bitte um eine Verlängerung. Für mehr Budget sagst du: "increase the budget by ...".', 'Would it be possible to extend the deadline by two weeks?'],
   ['Du schlägst die nächsten Schritte vor', 'As a next step, I suggest that we ...', 'Gespräch abschließen: konkrete nächste Schritte vorschlagen.', 'As a next step, I suggest that we schedule a call on Tuesday.'],
   ['Du widersprichst höflich', 'I see it a bit differently. In my view, ...', 'Höflicher Widerspruch ohne "Du hast Unrecht".', 'I see it a bit differently. In my view, the risk is lower than you think.'],
-  ['Du nennst den Preis und begründest ihn', 'The price includes ..., which means ...', 'Verbinde den Preis immer mit dem Inhalt.', 'The price includes training and support, which means you save time later.']
+  ['Du nennst den Preis und begründest ihn', 'The price includes ..., which means ...', 'Verbinde den Preis am besten mit dem Inhalt.', 'The price includes training and support, which means you save time later.']
 ].map(([de, en, why, ex]) => ({ de, en, why, ex }));
 
 // Einwand + drei Strategien (Name, Beispielsatz)
 const OBJECTIONS = [
   { q: "That's too expensive for us.", opts: [['Verständnis + Nutzen', "I understand, and that's why I'd like to show you what the price includes."], ['Bedingter Rabatt', 'We could lower the price if you commit to a longer contract.'], ['Umfang anpassen', 'What if we reduce the scope so it fits your budget?']] },
-  { q: 'We already work with another provider.', opts: [['Ergänzen statt ersetzen', "That's great. I'm not asking you to replace them, only to try us on a small project."], ['Nachfragen', 'What do you like most about your current provider, and what could be better?'], ['Pilotprojekt', 'Would you be open to a small pilot project to compare?']] },
-  { q: "We don't have the budget this quarter.", opts: [['Zeit schaffen', 'No problem. Could we plan the start for next quarter and agree the price now?'], ['In Phasen teilen', 'We could split the project into two phases, so the first phase costs less.'], ['Zahlungsplan', 'Would a payment plan over several months help?']] },
-  { q: 'Can you do it faster?', opts: [['Mit Bedingung', 'Yes, if we reduce the scope or you can give feedback within two days.'], ['Priorität klären', 'What is the most important part? I can deliver that first.'], ['Ehrlich begrenzen', "Faster would affect quality, so I'd suggest keeping the original timeline."]] },
+  { q: 'We already work with another provider.', opts: [['Ergänzen statt ersetzen', "That's great. I'm not asking you to replace them, only to try us on a small project."], ['Nachfragen', 'What do you like most about your current provider, and what could be better?'], ['Pilotprojekt', 'Would you be open to a small pilot project, so you can compare us with your current provider?']] },
+  { q: "We don't have the budget this quarter.", opts: [['Zeit schaffen', 'No problem. Could we plan the start for next quarter and agree on the price now?'], ['In Phasen teilen', 'We could split the project into two phases, so the first phase costs less.'], ['Zahlungsplan', 'Would a payment plan over several months help?']] },
+  { q: 'Can you do it faster?', opts: [['Mit Bedingung', 'Yes, if we reduce the scope or if you give us feedback within two days.'], ['Priorität klären', 'What is the most important part? I can deliver that first.'], ['Ehrlich begrenzen', "Faster would affect quality, so I'd suggest keeping the original timeline."]] },
   { q: 'I need to discuss this with my team first.', opts: [['Unterstützen', 'Of course. Shall I send you a short summary for your team?'], ['Termin festhalten', 'That makes sense. When can we speak again?'], ['Dabei sein', 'Would it help if I joined the call to answer questions?']] },
-  { q: 'Why should we choose you?', opts: [['Nutzen nennen', 'Because we focus on small companies, so you get fast answers and clear prices.'], ['Beleg zeigen', 'We have done similar projects, and I can show you the results.'], ['Risiko senken', 'We start with a small step, so your risk stays low.']] },
+  { q: 'Why should we choose you?', opts: [['Nutzen nennen', 'We focus on small companies, so you get fast answers and clear prices.'], ['Beleg zeigen', 'We have done similar projects, and I can show you the results.'], ['Risiko senken', 'We start with a small step, so your risk stays low.']] },
   { q: 'Your competitor offers the same for less.', opts: [['Unterschied zeigen', "Possibly, but let's compare what is included, because the details often differ."], ['Wert betonen', "Price is one part. Reliability and support matter too, and that's where we're strong."], ['Angebot ansehen', 'Could you show me their offer? Then I can tell you exactly where we differ.']] },
   { q: "We can't pay upfront.", opts: [['Teilbetrag', 'Understood. Would 30% at the start and the rest on delivery work?'], ['Meilensteine', 'We could agree on milestones, with a payment after each one.'], ['Grund + Entgegenkommen', "An upfront payment covers our material costs, but I'm open to a smaller amount."]] }
 ];
@@ -86,7 +86,8 @@ function gameCirc() {
   micButton(btn, '● Umschreiben', '■ Fertig', {
     text: async t => {
       if (!t) { res.textContent = 'Nichts verstanden. Nochmal.'; return; }
-      if (words(t).join(' ').includes(words(en).join(' '))) { res.textContent = `Versuch es ohne das Wort selbst ("${en}").`; return; }
+      // ganze Wörter prüfen, nicht Wortteile
+      if ((' ' + words(t).join(' ') + ' ').includes(' ' + words(en).join(' ') + ' ')) { res.textContent = `Versuch es ohne das Wort selbst ("${en}").`; return; }
       const c = await api('/circ', { de, en, def, text: t }, false, 60000);
       if (my !== viewId) return; // Ansicht wurde inzwischen verlassen
       count();
@@ -106,7 +107,7 @@ function gameCirc() {
 
 // ---------- Satzrahmen sprechen ----------
 function gameFrame() {
-  const fromDeck = S.deck.filter(c => c.en.includes('...')).map(c => ({ de: c.de, en: c.en, why: '', ex: '' })); // eigene Rahmen aus deinen Gesprächen
+  const fromDeck = S.deck.filter(c => c.en.includes('...')).map(c => ({ de: c.de, en: c.en, why: 'Das ist ein Satzbaustein aus deinen eigenen Gesprächen. Sag den Satz mit deinem eigenen Inhalt.', ex: '' })); // eigene Rahmen aus deinen Gesprächen
   const f = pick([...FRAMES, ...fromDeck])[0];
   const res = el('div', { class: 'mut' }), extra = el('div'), btn = el('button', { class: 'big' }), count = countOnce();
   let my = 0;
@@ -142,9 +143,10 @@ function gameBlitz() {
       if (words(t).length < 4) { res.textContent = `Kurz. Versuch einen ganzen Satz, zum Beispiel "I understand …, but …" oder "What if we …?" Du sagtest: "${t}"`; return; }
       const o = qs[i]; res.textContent = `✓ Du hast geantwortet: "${t}"`; btn.style.display = 'none';
       const slot = el('div'), last = i === 2;
+      if (last) count(); // die Runde zählt, sobald die dritte Antwort gegeben ist
       extra.replaceChildren(...examples(o.opts),
         el('div', { class: 'row' }, feedbackButton(`Business negotiation practice. The other side objects: "${o.q}" The user answers.`, () => t, slot, my),
-          el('button', { class: 'sm', onclick: () => { if (last) { count(); finish(); } else { i++; ask(); } } }, last ? 'Fertig' : 'Nächster Einwand')), slot);
+          el('button', { class: 'sm', onclick: () => { if (last) finish(); else { i++; ask(); } } }, last ? 'Fertig' : 'Nächster Einwand')), slot);
     },
     error: e => { res.textContent = 'Fehler: ' + e.message; }
   });
