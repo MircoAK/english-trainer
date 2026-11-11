@@ -47,10 +47,13 @@ def ollama(messages):
 
 def reply(scenario, history, text):
     sys_p = (f"You are a role-play partner in a business negotiation. Scenario: {scenario}\n"
-             "Stay in role. Answer in 1-3 sentences of natural, fluent business English. "
-             "The user is a German speaker; their text is a speech transcript, German words are vocabulary gaps: "
-             "understand them and just continue. Never correct them, never break role, no German.")
-    first = "Open the scene with your first line." if text == "[START]" else text
+             "Stay in role. You ALWAYS write in English only, in every single reply, whatever language the other person uses. "
+             "Answer in 1-3 sentences of natural, fluent business English. "
+             "Their text is a speech transcript and may contain words from another language: understand them and continue in English. "
+             "Never correct them and never break role.")
+    # Hinweis am Ende jeder Nachricht: das kleine Modell driftet sonst ins Deutsche
+    first = ("Open the scene with your first line. (English only.)" if text == "[START]"
+             else f"{text}\n\n(Reply in English only.)")
     return ollama([{"role": "system", "content": sys_p}, *history, {"role": "user", "content": first}])
 
 
