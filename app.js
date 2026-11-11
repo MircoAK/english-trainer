@@ -152,16 +152,18 @@ function review() {
 }
 
 function settings() {
-  const br = el('input', { placeholder: 'https://dein-pc.tailnet.ts.net', value: S.bridge });
-  const tk = el('input', { type: 'password', placeholder: 'BRIDGE_TOKEN aus bridge/.env', value: S.token });
+  const noFix = { autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false', autocomplete: 'off' }; // iOS-Tastatur verändert sonst Adressen
+  const br = el('input', { type: 'url', placeholder: 'https://dein-pc.tailnet.ts.net', value: S.bridge, ...noFix });
+  const tk = el('input', { type: 'password', placeholder: 'BRIDGE_TOKEN aus bridge/.env', value: S.token, ...noFix });
   const msg = el('p', { class: 'mut' });
   show(back(), el('h1', {}, 'Einstellungen'),
     el('h2', {}, 'Adresse der PC-Brücke'), br,
     el('h2', {}, 'Token'), tk,
     el('button', { class: 'pri', onclick: async () => {
-      S.bridge = br.value.trim(); S.token = tk.value.trim(); save();
-      try { const r = await fetch(S.bridge.replace(/\/$/, '') + '/'); msg.textContent = (await r.json()).ok ? 'Gespeichert. PC erreichbar. ✓' : 'Gespeichert, aber komische Antwort.'; }
-      catch { msg.textContent = 'Gespeichert, aber PC nicht erreichbar.'; }
+      S.bridge = br.value.trim().replace(/\/+$/, ''); S.token = tk.value.trim(); save();
+      msg.textContent = 'Teste …';
+      try { const r = await fetch(S.bridge + '/'); msg.textContent = (await r.json()).ok ? 'Gespeichert. PC erreichbar. ✓' : 'Gespeichert, aber komische Antwort.'; }
+      catch (e) { msg.textContent = `Gespeichert, aber Fehler (${e.name}: ${e.message}) bei Adresse "${S.bridge}"`; } // Adresse ist kein Geheimnis, Token wird nie angezeigt
     } }, 'Speichern und testen'),
     el('h2', {}, 'Sicherung'),
     el('button', { onclick: async () => { await navigator.clipboard.writeText(JSON.stringify({ deck: S.deck, days: S.days })); msg.textContent = 'In die Zwischenablage kopiert.'; } }, 'Sicherung kopieren'),
