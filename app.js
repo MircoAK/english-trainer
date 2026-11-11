@@ -38,7 +38,8 @@ let cleanup = null; // räumt die aktuelle Ansicht auf (Mikrofon, Sprachausgabe,
 // show() räumt die alte Ansicht auf. Neue Aufräumfunktion immer NACH show() setzen (setView), sonst räumt show() sie sofort selbst ab.
 const show = (...n) => { if (cleanup) { cleanup(); cleanup = null; } viewId++; speechSynthesis.cancel(); $('#app').replaceChildren(...n); window.scrollTo(0, 0); };
 const setView = fn => { cleanup = fn; };
-const say = t => { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; u.rate = .95; speechSynthesis.speak(u); };
+// Sprachausgabe darf nie den Ablauf stören (fehlt oder blockiert auf manchen Geräten); es gibt immer den 🔊-Knopf zum Wiederholen
+const say = t => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; u.rate = .95; speechSynthesis.speak(u); } catch {} };
 const speakBtn = t => el('button', { class: 'sm', onclick: () => say(t) }, '🔊 anhören');
 const back = () => el('button', { class: 'back', onclick: home }, '← Zurück');
 
