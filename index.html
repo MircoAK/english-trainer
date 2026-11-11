@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Business English</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--mut:#6b7280;--card:#f1f3f5;--acc:#2563eb;--ok:#15803d;--bad:#b91c1c}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--fg:#eceef1;--mut:#9aa3af;--card:#1e242c;--acc:#4c8dff;--ok:#4ade80;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.45 system-ui,-apple-system,sans-serif;padding:16px 16px calc(24px + env(safe-area-inset-bottom));max-width:640px;margin-inline:auto}
+h1{font-size:22px;margin:4px 0 12px}
+h2{font-size:15px;margin:20px 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+button,input{font:inherit}
+button{background:var(--card);color:var(--fg);border:0;border-radius:12px;padding:14px 16px;width:100%;text-align:left;margin:0 0 8px;cursor:pointer}
+button.pri{background:var(--acc);color:#fff;text-align:center}
+button.big{background:var(--acc);color:#fff;text-align:center;font-size:20px;padding:20px;position:sticky;bottom:12px}
+button.big.rec{background:var(--bad)}
+button.sm{width:auto;padding:6px 12px;margin:6px 0 0;font-size:15px}
+button:disabled{opacity:.5}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);margin-bottom:8px}
+.mut{color:var(--mut);font-size:15px}
+.streak{font-size:32px;font-weight:700}
+.bub{padding:12px 14px;border-radius:14px;margin:8px 0;max-width:92%;white-space:pre-wrap}
+.me{background:var(--acc);color:#fff;margin-left:auto}
+.ai{background:var(--card)}
+.fb{border-left:4px solid var(--ok);background:var(--card);padding:10px 14px;border-radius:8px;margin:8px 0}
+.fb b{display:block;font-size:13px;color:var(--mut);text-transform:uppercase;margin-top:8px}
+.err{color:var(--bad);margin:8px 0}
+.back{background:none;padding:6px 0;width:auto;color:var(--acc)}
+.row{display:flex;gap:8px}.row button{text-align:center}
+.en{font-size:21px;font-weight:600;margin:12px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+</body>
+</html>
