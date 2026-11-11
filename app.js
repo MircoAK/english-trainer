@@ -1,6 +1,6 @@
-// Business English Trainer. Alles lokal im Handy (localStorage). Nur Audio/Text gehen an OpenAI.
+// Business English Trainer. Daten lokal im Handy (localStorage). Audio/Text gehen nur an deinen PC (bridge/server.py).
 const $ = s => document.querySelector(s);
-const S = Object.assign({ key: '', chatModel: 'gpt-4o', sttModel: 'whisper-1', deck: [], days: [] },
+const S = Object.assign({ bridge: '', token: '', deck: [], days: [] },
   JSON.parse(localStorage.getItem('bt') || '{}'));
 const save = () => localStorage.setItem('bt', JSON.stringify(S));
 const dstr = d => d.toLocaleDateString('sv'); // YYYY-MM-DD, lokale Zeit
@@ -24,27 +24,20 @@ const show = (...n) => { speechSynthesis.cancel(); $('#app').replaceChildren(...
 const say = t => { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; u.rate = .95; speechSynthesis.speak(u); };
 const back = () => el('button', { class: 'back', onclick: home }, '← Zurück');
 
-// ---------- OpenAI ----------
-async function api(path, opts) {
-  if (!S.key) throw new Error('Kein API-Schlüssel. Unter Einstellungen eintragen.');
-  const r = await fetch('https://api.openai.com/v1/' + path, { ...opts, headers: { ...opts.headers, Authorization: 'Bearer ' + S.key } });
-  if (!r.ok) { let m = r.status; try { m = (await r.json()).error.message; } catch {} throw new Error(m); }
-  return r.json();
+// ---------- Brücke zum PC ----------
+async function api(path, body, raw) {
+  if (!S.bridge || !S.token) throw new Error('Brücke nicht eingerichtet. Unter Einstellungen eintragen.');
+  let r;
+  try {
+    r = await fetch(S.bridge.replace(/\/$/, '') + path, { method: 'POST', headers: { 'X-Token': S.token, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ? body : JSON.stringify(body) });
+  } catch { throw new Error('PC nicht erreichbar. Läuft die Brücke und ist Tailscale an?'); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
 }
-async function stt(blob) {
-  const f = new FormData();
-  f.append('file', blob, 'a.' + (blob.type.includes('mp4') ? 'mp4' : 'webm'));
-  f.append('model', S.sttModel);
-  f.append('prompt', 'Business negotiation. English with some German words.'); // keine feste Sprache: Deutsch zwischendurch erlaubt
-  return (await api('audio/transcriptions', { method: 'POST', body: f })).text;
-}
-async function chat(messages) {
-  const r = await api('chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: S.chatModel, response_format: { type: 'json_object' }, messages })
-  });
-  return JSON.parse(r.choices[0].message.content);
-}
+const stt = async blob => (await api('/stt', blob, true)).text;
+const reply = (sc, history, text) => api('/reply', { scenario: sc[1], history, text }).then(j => j.reply);
+const feedbackFor = (sc, text) => api('/feedback', { scenario: sc[1], text });
 
 let rec, parts = [];
 async function recStart() {
@@ -69,18 +62,6 @@ const SCENARIOS = [
   ['Höflich absagen', 'You are a potential client who wants a custom project that does not fit the user. The user must decline politely and keep the relationship, maybe proposing an alternative.'],
   ['Einwand: "Wir haben schon einen Anbieter"', 'You are a skeptical buyer who already works with a competitor. The user must create interest and negotiate a small pilot project.']
 ];
-const SYS = sc => `You are a business English coach and role-play partner.
-Scenario: ${sc[1]}
-Stay in role. The user is a German speaker at roughly B1 speaking level who must reach C1 negotiation English. Their message is a speech transcript; German words in it mark vocabulary they were missing.
-Always answer with ONLY a JSON object:
-{"reply": "your next line in role, natural C1 business English, 1-3 sentences, keep the negotiation moving",
- "corrected": "the user's last utterance as ONE natural, fluent C1 business English version, same meaning",
- "gaps": [{"de":"German word or phrase the user was missing or got wrong","en":"best English"}],
- "chunks": [{"de":"short German description of the situation/intention","en":"reusable English sentence frame, with ... for the variable part"}],
- "note": "one short German sentence about their biggest sentence-structure problem, or empty"}
-Max 3 gaps and max 3 chunks; chunks must be useful sentence patterns, not single words.
-For the very first turn the user message is [START]: return ONLY {"reply": "..."} that opens the scene.`;
-
 // ---------- Views ----------
 function home() {
   const due = S.deck.filter(c => c.due <= today()).length;
@@ -97,7 +78,7 @@ function home() {
 }
 
 function session(sc) {
-  const hist = [{ role: 'system', content: SYS(sc) }];
+  const hist = [];
   const log = el('div'), stat = el('p', { class: 'mut' }, 'Ich eröffne das Gespräch …');
   const btn = el('button', { class: 'big' }, '● Aufnehmen');
   btn.disabled = true;
@@ -105,7 +86,7 @@ function session(sc) {
   const add = (cls, txt) => { const d = el('div', { class: 'bub ' + cls }, txt); log.append(d); d.scrollIntoView({ block: 'end', behavior: 'smooth' }); return d; };
   const fail = e => { add('err', 'Fehler: ' + e.message); stat.textContent = ''; };
 
-  function feedback(j) {
+  function feedback(j, slot) {
     const fb = el('div', { class: 'fb' });
     if (j.corrected) fb.append(el('b', {}, 'So klingt es auf C1'), j.corrected,
       el('button', { class: 'sm', onclick: () => say(j.corrected) }, '🔊 anhören'));
@@ -117,7 +98,7 @@ function session(sc) {
       S.deck.push({ de: c.de, en: c.en, box: 0, due: today() }); n++;
     }
     if (n) { save(); fb.append(el('b', {}, 'Neue Satzbausteine gespeichert'), `${n} neu im Wiederholen`); }
-    log.append(fb);
+    slot.append(fb);
   }
 
   btn.onclick = async () => {
@@ -131,22 +112,21 @@ function session(sc) {
       const text = (await stt(await recStop())).trim();
       if (!text) { stat.textContent = 'Nichts verstanden. Nochmal.'; return; }
       add('me', text);
-      hist.push({ role: 'user', content: text });
+      const slot = el('div'); log.append(slot); // Feedback kommt später (ca. 10 s) und landet hier
+      feedbackFor(sc, text).then(j => { feedback(j, slot); mark(); }).catch(e => slot.append(el('div', { class: 'err' }, 'Feedback: ' + e.message)));
       stat.textContent = 'Denke nach …';
-      const j = await chat(hist);
-      hist.push({ role: 'assistant', content: JSON.stringify({ reply: j.reply }) });
-      feedback(j); mark();
-      add('ai', j.reply); say(j.reply);
+      const r = await reply(sc, hist, text);
+      hist.push({ role: 'user', content: text }, { role: 'assistant', content: r });
+      add('ai', r); say(r);
       stat.textContent = '';
     } catch (e) { on = false; fail(e); }
     finally { btn.disabled = false; btn.classList.remove('rec'); btn.textContent = '● Aufnehmen'; }
   };
 
   show(back(), el('h1', {}, sc[0]), log, stat, btn);
-  hist.push({ role: 'user', content: '[START]' });
-  chat(hist).then(j => {
-    hist.push({ role: 'assistant', content: JSON.stringify({ reply: j.reply }) });
-    add('ai', j.reply); say(j.reply); stat.textContent = ''; btn.disabled = false;
+  reply(sc, [], '[START]').then(r => {
+    hist.push({ role: 'user', content: 'Open the scene.' }, { role: 'assistant', content: r });
+    add('ai', r); say(r); stat.textContent = ''; btn.disabled = false;
   }).catch(e => { fail(e); btn.disabled = false; });
 }
 
@@ -172,14 +152,18 @@ function review() {
 }
 
 function settings() {
-  const key = el('input', { type: 'password', placeholder: 'sk-…', value: S.key });
-  const cm = el('input', { value: S.chatModel }), sm = el('input', { value: S.sttModel });
+  const br = el('input', { placeholder: 'https://dein-pc.tailnet.ts.net', value: S.bridge });
+  const tk = el('input', { type: 'password', placeholder: 'Token aus bridge/token.txt', value: S.token });
   const msg = el('p', { class: 'mut' });
   show(back(), el('h1', {}, 'Einstellungen'),
-    el('h2', {}, 'OpenAI API-Schlüssel'), key,
-    el('h2', {}, 'Chat-Modell'), cm, el('h2', {}, 'Spracherkennung'), sm,
-    el('button', { class: 'pri', onclick: () => { S.key = key.value.trim(); S.chatModel = cm.value.trim(); S.sttModel = sm.value.trim(); save(); msg.textContent = 'Gespeichert.'; } }, 'Speichern'),
-    el('h2', {}, 'Sicherung (ohne Schlüssel)'),
+    el('h2', {}, 'Adresse der PC-Brücke'), br,
+    el('h2', {}, 'Token'), tk,
+    el('button', { class: 'pri', onclick: async () => {
+      S.bridge = br.value.trim(); S.token = tk.value.trim(); save();
+      try { const r = await fetch(S.bridge.replace(/\/$/, '') + '/'); msg.textContent = (await r.json()).ok ? 'Gespeichert. PC erreichbar. ✓' : 'Gespeichert, aber komische Antwort.'; }
+      catch { msg.textContent = 'Gespeichert, aber PC nicht erreichbar.'; }
+    } }, 'Speichern und testen'),
+    el('h2', {}, 'Sicherung'),
     el('button', { onclick: async () => { await navigator.clipboard.writeText(JSON.stringify({ deck: S.deck, days: S.days })); msg.textContent = 'In die Zwischenablage kopiert.'; } }, 'Sicherung kopieren'),
     el('button', { onclick: () => { const t = prompt('Sicherung einfügen'); if (!t) return; try { const o = JSON.parse(t); S.deck = o.deck; S.days = o.days; save(); msg.textContent = 'Wiederhergestellt.'; } catch { msg.textContent = 'Ungültig.'; } } }, 'Sicherung einfügen'),
     msg);
