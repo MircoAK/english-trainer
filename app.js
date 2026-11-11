@@ -5,12 +5,15 @@ const dstr = d => d.toLocaleDateString('sv'); // YYYY-MM-DD, lokale Zeit
 const today = () => dstr(new Date());
 const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); };
 const KEY = 'bt';
+const IV = [0, 1, 3, 7, 14, 30, 60]; // Tage bis zur nächsten Wiederholung pro Stufe
 
 function load() { try { const o = JSON.parse(localStorage.getItem(KEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }
 const S = Object.assign({ bridge: '', token: '', deck: [], days: [], level: 1, runs: {}, newToday: { d: '', n: 0 } }, load());
 const okCard = c => c && typeof c.de === 'string' && typeof c.en === 'string';
-const fixDeck = d => (Array.isArray(d) ? d : []).filter(okCard).map(c => ({ de: c.de, en: c.en, box: Number.isInteger(c.box) ? c.box : 0, due: typeof c.due === 'string' ? c.due : today() }));
+const fixDeck = d => (Array.isArray(d) ? d : []).filter(okCard).map(c => ({ de: c.de, en: c.en, box: Number.isInteger(c.box) ? Math.min(Math.max(c.box, 0), IV.length - 1) : 0, due: typeof c.due === 'string' ? c.due : today() }));
 S.deck = fixDeck(S.deck);
+if (typeof S.bridge !== 'string') S.bridge = '';
+if (typeof S.token !== 'string') S.token = '';
 S.days = (Array.isArray(S.days) ? S.days : []).filter(x => typeof x === 'string');
 if (![1, 2, 3].includes(S.level)) S.level = 1;
 if (!S.runs || typeof S.runs !== 'object') S.runs = {};
@@ -32,7 +35,9 @@ const el = (t, a = {}, ...k) => {
   e.append(...k); return e;
 };
 let cleanup = null; // räumt die aktuelle Ansicht auf (Mikrofon, Sprachausgabe, Bildschirmsperre)
-const show = (...n) => { if (cleanup) { cleanup(); cleanup = null; } speechSynthesis.cancel(); $('#app').replaceChildren(...n); window.scrollTo(0, 0); };
+// show() räumt die alte Ansicht auf. Neue Aufräumfunktion immer NACH show() setzen (setView), sonst räumt show() sie sofort selbst ab.
+const show = (...n) => { if (cleanup) { cleanup(); cleanup = null; } viewId++; speechSynthesis.cancel(); $('#app').replaceChildren(...n); window.scrollTo(0, 0); };
+const setView = fn => { cleanup = fn; };
 const say = t => { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'en-US'; u.rate = .95; speechSynthesis.speak(u); };
 const speakBtn = t => el('button', { class: 'sm', onclick: () => say(t) }, '🔊 anhören');
 const back = () => el('button', { class: 'back', onclick: home }, '← Zurück');
@@ -43,56 +48,72 @@ const base = () => (S.bridge || (location.hostname.endsWith('.ts.net') ? locatio
 async function api(path, body, raw, ms = 45000) {
   if (!base() || !S.token) throw new Error('Brücke nicht eingerichtet. Unter Einstellungen eintragen.');
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms);
-  let r;
-  try {
-    r = await fetch(base() + path, { method: 'POST', signal: ctl.signal, headers: { 'X-Token': S.token, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ? body : JSON.stringify(body) });
-  } catch (e) { throw new Error(e.name === 'AbortError' ? 'Zeitüberschreitung. PC zu langsam oder Brücke hängt.' : 'PC nicht erreichbar. Läuft die Brücke und ist Tailscale an?'); }
+  try { // der Timer läuft bis der Antwortkörper komplett gelesen ist
+    let r;
+    try { r = await fetch(base() + path, { method: 'POST', signal: ctl.signal, headers: { 'X-Token': S.token, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ? body : JSON.stringify(body) }); }
+    catch (e) { if (e.name === 'AbortError') throw e; throw new Error('PC nicht erreichbar. Läuft die Brücke und ist Tailscale an?'); }
+    let j; try { j = await r.json(); } catch (e) { if (e.name === 'AbortError') throw e; throw new Error('Komische Antwort vom PC (' + r.status + ')'); }
+    if (!r.ok) throw new Error(j.error || r.status);
+    return j;
+  } catch (e) { throw e.name === 'AbortError' ? new Error('Zeitüberschreitung. PC zu langsam, Modell lädt vielleicht gerade, oder die Brücke hängt.') : e; }
   finally { clearTimeout(t); }
-  let j; try { j = await r.json(); } catch { throw new Error('Komische Antwort vom PC (' + r.status + ')'); }
-  if (!r.ok) throw new Error(j.error || r.status);
-  return j;
 }
 const stt = async blob => (await api('/stt', blob, true, 60000)).text;
-const reply = (sc, history, text, variant) => api('/reply', { scenario: sc.setup, history, text, level: S.level, variant: !!variant }).then(j => j.reply);
+const reply = (sc, history, text, variant) => api('/reply', { scenario: sc.setup, history, text, level: S.level, variant: !!variant }, false, 60000).then(j => j.reply);
 const feedbackFor = (sc, text) => api('/feedback', { scenario: sc.setup, text }, false, 150000);
 
 // ---------- Mikrofon ----------
-let rec = null, parts = [], micInUse = false;
+// Jede Aufnahme ist ein eigenes Objekt. micOwner = wer das Mikrofon gerade hält. Epoch ändert sich bei jedem Abbruch,
+// damit eine verspätete Mikrofonfreigabe nach einem Ansichtswechsel keinen Recorder mehr startet.
+let rec = null, micOwner = null, epoch = 0;
+const stopTracks = st => st && st.getTracks().forEach(t => t.stop());
 async function recStart() {
+  const my = epoch;
   let st;
   try { st = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch { throw new Error('Mikrofon nicht erlaubt. In den iOS-Einstellungen unter Safari das Mikrofon erlauben.'); }
-  const r = new MediaRecorder(st); parts = [];
-  r.ondataavailable = e => parts.push(e.data);
-  r.start(); rec = r;
+  if (my !== epoch) { stopTracks(st); throw new Error('abgebrochen'); }
+  try {
+    const r = { st, chunks: [], mr: new MediaRecorder(st) };
+    r.mr.ondataavailable = e => r.chunks.push(e.data);
+    r.mr.start(); rec = r;
+  } catch { stopTracks(st); throw new Error('Aufnahme konnte nicht starten.'); }
 }
-const recStop = () => new Promise(res => {
+const recStop = () => new Promise((res, rej) => {
   const r = rec; rec = null;
-  r.onstop = () => { r.stream.getTracks().forEach(t => t.stop()); res(new Blob(parts, { type: r.mimeType })); };
-  r.stop();
+  if (!r) return rej(new Error('Keine Aufnahme aktiv.'));
+  r.mr.onstop = () => { stopTracks(r.st); res(new Blob(r.chunks, { type: r.mr.mimeType })); };
+  r.mr.onerror = () => { stopTracks(r.st); rej(new Error('Aufnahmefehler.')); };
+  try { r.mr.stop(); } catch { stopTracks(r.st); rej(new Error('Aufnahmefehler.')); }
 });
-function recAbort() { if (rec) { const r = rec; rec = null; r.onstop = null; try { r.stop(); } catch {} r.stream.getTracks().forEach(t => t.stop()); } micInUse = false; }
+function recAbort() { epoch++; micOwner = null; if (rec) { const r = rec; rec = null; r.mr.onstop = null; try { r.mr.stop(); } catch {} stopTracks(r.st); } }
 
 // Ein Knopf mit klaren Zuständen: idle -> starting -> recording -> busy -> idle. Nur ein Mikrofon gleichzeitig.
 function micButton(btn, idleText, recText, h) {
-  let st = 'idle';
+  const me = Symbol(); let st = 'idle';
   const set = s => { st = s; btn.classList.toggle('rec', s === 'recording'); btn.textContent = s === 'recording' ? recText : s === 'idle' ? idleText : '…'; btn.disabled = s === 'starting' || s === 'busy'; };
+  const free = () => { if (micOwner === me) micOwner = null; };
   set('idle');
   btn.onclick = async () => {
     if (st === 'idle') {
-      if (micInUse) return;
-      micInUse = true; set('starting');
-      try { await recStart(); set('recording'); } catch (e) { micInUse = false; set('idle'); h.error(e); }
+      if (micOwner) return;
+      micOwner = me; set('starting');
+      try { await recStart(); set('recording'); } catch (e) { free(); set('idle'); if (e.message !== 'abgebrochen') h.error(e); }
     } else if (st === 'recording') {
       set('busy');
-      try { await h.text((await stt(await recStop())).trim()); } catch (e) { h.error(e); } finally { micInUse = false; set('idle'); }
+      try { await h.text((await stt(await recStop())).trim()); } catch (e) { h.error(e); } finally { free(); set('idle'); }
     }
   };
 }
 
-let wake = null;
-const lockScreen = async () => { try { wake = await navigator.wakeLock.request('screen'); } catch {} };
+let wake = null, viewId = 0;
+const lockScreen = async () => { // Bildschirm anlassen, solange diese Ansicht offen ist
+  const my = viewId;
+  try { const w = await navigator.wakeLock.request('screen'); if (my !== viewId) { w.release(); return; } wake = w; } catch {}
+};
 const unlockScreen = () => { try { wake && wake.release(); } catch {} wake = null; };
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && wake === null && lockWanted) lockScreen(); });
+let lockWanted = false;
 
 // ---------- Szenarien (Titel, Rolle des Gegenübers, Satzanfänge als Starthilfe) ----------
 const SCENARIOS = [
@@ -114,14 +135,15 @@ const SCENARIOS = [
     st: ['I understand you already work with someone.', 'Would you be open to a small pilot project?', 'We could start with …, and then you decide.'] }
 ];
 
-// neue Satzbausteine speichern; höchstens 4 pro Tag sind sofort fällig, der Rest morgen
+// neue Satzbausteine speichern; an jedem Tag sind höchstens 4 neue (Stufe 0) fällig, der Rest rutscht auf den nächsten freien Tag
 function saveChunks(list) {
   let n = 0;
   for (const c of list || []) {
-    if (!c.en || !c.de || S.deck.some(x => x.en === c.en)) continue;
-    if (S.newToday.d !== today()) S.newToday = { d: today(), n: 0 };
-    S.deck.push({ de: c.de, en: c.en, box: 0, due: S.newToday.n < 4 ? today() : inDays(1) });
-    S.newToday.n++; n++;
+    if (!c || typeof c.en !== 'string' || typeof c.de !== 'string' || !c.en || !c.de || S.deck.some(x => x.en === c.en)) continue;
+    let k = 0;
+    while (S.deck.filter(x => x.box === 0 && x.due === inDays(k)).length >= 4) k++;
+    S.deck.push({ de: c.de, en: c.en, box: 0, due: inDays(k) });
+    n++;
   }
   if (n) save();
   return n;
@@ -149,39 +171,40 @@ function home() {
 
 function feedbackCard(j, n) {
   const fb = el('div', { class: 'fb' });
-  if (j.better) fb.append(el('b', {}, 'Deine Version, verständlich korrigiert'), j.better, el('div', {}, speakBtn(j.better)));
-  if (j.c1) fb.append(el('details', {}, el('summary', {}, 'Alternative für später (C1)'), j.c1, el('div', {}, speakBtn(j.c1))));
-  if (j.gaps && j.gaps.length) fb.append(el('b', {}, 'Fehlende Wörter'), ...j.gaps.map(g => el('div', {}, `${g.de} → ${g.en}`)));
-  if (j.note) fb.append(el('b', {}, 'Satzbau'), j.note);
+  // Erst der Fokus und ein eigener zweiter Versuch, die korrigierte Version erst danach (Selbstkorrektur vor Lösung)
+  const better = j.better ? el('details', {}, el('summary', {}, 'Korrigierte Version zeigen'), j.better, el('div', {}, speakBtn(j.better)),
+    ...(j.c1 ? [el('details', {}, el('summary', {}, 'Alternative für später (C1)'), j.c1, el('div', {}, speakBtn(j.c1)))] : [])) : null;
   if (j.focus) {
     const f = j.focus, res = el('div', { class: 'mut' }), model = el('div');
     const retry = el('button', { class: 'sm' });
     micButton(retry, '🎤 Nochmal sagen', '■ Fertig', {
       text: async t => {
         if (!t) { res.textContent = 'Nichts verstanden. Nochmal.'; return; }
-        const c = await api('/check', { focus: f, text: t });
-        res.textContent = (c.fixed ? '✓ ' : 'Fast. ') + c.comment + (c.fixed ? '' : ` Probier den Anfang: "${f.starter} …"`);
+        const c = await api('/check', { focus: f, text: t }, false, 60000);
+        res.textContent = c.fixed === true ? `✓ ${c.comment}`
+          : c.fixed === false ? `Fast. ${c.comment} Probier den Anfang: "${f.starter} …"`
+          : 'Das konnte ich nicht sicher beurteilen. Vergleiche mit der korrigierten Version.';
       },
       error: e => { res.textContent = 'Fehler: ' + e.message; }
     });
     fb.append(el('b', {}, 'Dein Fokus'), f.de, ...(f.starter ? [el('div', { class: 'mut' }, `Beginne mit: "${f.starter} …"`)] : []),
       el('div', { class: 'row' }, retry, el('button', { class: 'sm', onclick: e => { e.target.remove(); model.append(`Lösung: ${f.model} `, speakBtn(f.model)); } }, 'Lösung zeigen')), res, model);
   }
+  if (j.gaps && j.gaps.length) fb.append(el('b', {}, 'Fehlende Wörter'), ...j.gaps.map(g => el('div', {}, `${g.de} → ${g.en}`)));
+  if (j.note) fb.append(el('b', {}, 'Satzbau'), j.note);
+  if (better) fb.append(el('b', {}, 'Deine Version'), better);
   if (n) fb.append(el('b', {}, 'Neue Satzbausteine gespeichert'), `${n} neu im Wiederholen`);
   return fb;
 }
 
 function session(sc, opts = {}) {
   let alive = true, opening = opts.opening || null;
-  const hist = [];
-  S.runs[sc.id] = (S.runs[sc.id] || 0) + 1; save();
+  const hist = [], runs = S.runs[sc.id] || 0; // runs zählt nur Durchgänge, in denen das Gegenüber wirklich geantwortet hat
   const log = el('div'), stat = el('p', { class: 'mut' }, 'Ich eröffne das Gespräch …');
   const btn = el('button', { class: 'big' });
-  const say2 = t => { say(t); };
   const add = (cls, txt) => { const d = el('div', { class: 'bub ' + cls }, txt); log.append(d); d.scrollIntoView({ block: 'end', behavior: 'smooth' }); return d; };
-  const addAI = r => { const d = add('ai', r); d.append(el('div', {}, speakBtn(r))); say2(r); };
+  const addAI = r => { const d = add('ai', r); d.append(el('div', {}, speakBtn(r))); say(r); };
   const fail = e => { add('err', 'Fehler: ' + e.message); stat.textContent = ''; };
-  cleanup = () => { alive = false; recAbort(); speechSynthesis.cancel(); unlockScreen(); };
 
   micButton(btn, '● Aufnehmen', '■ Fertig', {
     text: async text => {
@@ -201,27 +224,31 @@ function session(sc, opts = {}) {
   btn.disabled = true;
 
   const help = el('details', {}, el('summary', {}, 'Satzanfänge als Starthilfe'), ...sc.st.map(x => el('div', {}, x)));
-  if (S.runs[sc.id] <= 3) help.open = true; // die ersten 3 Durchgänge offen, danach nur auf Wunsch
+  if (runs < 3) help.open = true; // die ersten 3 Durchgänge offen, danach nur auf Wunsch
   const again = el('div', { class: 'row' },
     el('button', { class: 'sm', onclick: () => session(sc, { opening }) }, 'Nochmal, gleiche Aufgabe'),
     el('button', { class: 'sm', onclick: () => session(sc, { variant: true }) }, 'Variante'));
   show(back(), el('h1', {}, sc.t), help, log, again, stat, btn);
-  lockScreen();
+  setView(() => { alive = false; recAbort(); speechSynthesis.cancel(); lockWanted = false; unlockScreen(); }); // erst NACH show()
+  lockWanted = true; lockScreen();
 
   const start = opening ? Promise.resolve(opening) : reply(sc, [], '[START]', opts.variant);
   start.then(r => {
     if (!alive) return;
+    S.runs[sc.id] = runs + 1; save();
     opening = r; hist.push({ role: 'user', content: 'Open the scene.' }, { role: 'assistant', content: r });
     addAI(r); stat.textContent = ''; btn.disabled = false;
   }).catch(e => { if (alive) { fail(e); btn.disabled = false; } });
 }
 
-const IV = [0, 1, 3, 7, 14, 30, 60]; // Tage bis zur nächsten Wiederholung pro Stufe
-const words = s => s.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean);
-// ponytail: milde Wortprüfung. Andere richtige Formulierungen können durchfallen, darum ist das nur ein Hinweis, die Selbstbewertung entscheidet.
+const NUM = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, ninety: 90, hundred: 100 };
+const words = s => s.toLowerCase().replace(/[’‘`´]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean).map(w => (w in NUM ? String(NUM[w]) : w));
+// ponytail: milde Wortprüfung. Ignoriert Reihenfolge und Bedeutung, andere richtige Formulierungen können durchfallen.
+// Darum nur ein Hinweis, die Selbstbewertung entscheidet. Zahlen müssen stimmen, sonst zählt "15" statt "50" als richtig.
 function matches(en, said) {
   const have = new Set(words(said)), need = words(en.replace(/\.\.\./g, ' '));
-  return need.length > 0 && need.filter(w => have.has(w)).length / need.length >= 0.8;
+  if (!need.length || need.filter(w => /^\d+$/.test(w)).some(w => !have.has(w))) return false;
+  return need.filter(w => have.has(w)).length / need.length >= 0.8;
 }
 
 function review() {
@@ -230,7 +257,8 @@ function review() {
     if (!q.length) return show(back(), el('h1', {}, 'Wiederholen'), el('p', {}, S.deck.length ? 'Für heute fertig. 🎉' : 'Noch nichts da. Übe zuerst ein Gespräch.'));
     const c = q[0], ans = el('div'), hint = el('div', { class: 'mut' });
     // Starthilfe nur auf den unteren Stufen, später ohne
-    const start = c.box <= 1 ? (c.en.split('...')[0].trim() || c.en.split(/\s+/).slice(0, 3).join(' ')) : '';
+    const head = c.en.includes('...') ? c.en.split('...')[0].trim() : '';
+    const start = c.box <= 1 ? (head || c.en.split(/\s+/).slice(0, 3).join(' ')) : '';
     const reveal = () => {
       if (!ans.childNodes.length) {
         say(c.en);
@@ -250,9 +278,9 @@ function review() {
       },
       error: e => { hint.textContent = 'Fehler: ' + e.message; }
     });
-    cleanup = () => { recAbort(); speechSynthesis.cancel(); };
     show(back(), el('h1', {}, 'Wiederholen'), el('p', { class: 'mut' }, `${q.length} offen. Sag den Satz laut auf Englisch:`),
       el('div', { class: 'en' }, c.de), ...(start ? [el('div', { class: 'mut' }, `Anfang: "${start} …"`)] : []), el('div', {}, speak), hint, showBtn, ans);
+    setView(() => { recAbort(); speechSynthesis.cancel(); }); // erst NACH show()
   };
   step();
 }
@@ -264,7 +292,7 @@ function settings() {
   const msg = el('p', { class: 'mut' });
   const validShape = o => o && Array.isArray(o.deck) && o.deck.every(okCard) && Array.isArray(o.days) && o.days.every(x => typeof x === 'string');
   show(back(), el('h1', {}, 'Einstellungen'),
-    el('p', { class: 'mut' }, 'Spracherkennung und Gegenüber laufen auf deinem PC. Das Feedback geht über dein ChatGPT-Konto (Codex) an OpenAI.'),
+    el('p', { class: 'mut' }, 'Spracherkennung und Gegenüber laufen auf deinem PC. Das Feedback geht über dein ChatGPT-Konto (Codex) an OpenAI. Dein PC schreibt deine Sätze (nur Text) in ein lokales Übungsprotokoll.'),
     el('h2', {}, 'Adresse der PC-Brücke'), br,
     el('h2', {}, 'Token'), tk,
     el('button', { class: 'pri', onclick: async () => {
@@ -279,13 +307,16 @@ function settings() {
       const t = prompt('Sicherung einfügen'); if (!t) return;
       let o; try { o = JSON.parse(t); } catch {}
       if (!validShape(o)) { msg.textContent = 'Ungültige Sicherung. Nichts geändert.'; return; }
-      try { localStorage.setItem(KEY + '_backup', JSON.stringify({ deck: S.deck, days: S.days })); } catch {}
-      S.deck = fixDeck(o.deck); S.days = o.days; save(); msg.textContent = `Wiederhergestellt (${S.deck.length} Satzbausteine). Der alte Stand liegt als Vorversion bereit.`;
+      const old = { deck: S.deck, days: S.days };
+      try { localStorage.setItem(KEY + '_backup', JSON.stringify(old)); } catch { msg.textContent = 'Konnte den alten Stand nicht als Vorversion sichern. Nichts geändert.'; return; }
+      S.deck = fixDeck(o.deck); S.days = o.days; save();
+      if (saveFailed) { S.deck = old.deck; S.days = old.days; msg.textContent = 'Speichern im Handy fehlgeschlagen. Nichts geändert.'; return; }
+      msg.textContent = `Wiederhergestellt (${S.deck.length} Satzbausteine). Der alte Stand liegt als Vorversion bereit.`;
     } }, 'Sicherung einfügen'),
     el('button', { onclick: () => {
       let o; try { o = JSON.parse(localStorage.getItem(KEY + '_backup')); } catch {}
       if (!validShape(o)) { msg.textContent = 'Keine Vorversion vorhanden.'; return; }
-      S.deck = fixDeck(o.deck); S.days = o.days; save(); msg.textContent = 'Vorversion zurückgeholt.';
+      S.deck = fixDeck(o.deck); S.days = o.days; save(); msg.textContent = saveFailed ? 'Speichern im Handy fehlgeschlagen.' : 'Vorversion zurückgeholt.';
     } }, 'Vorversion zurückholen'),
     msg);
 }
