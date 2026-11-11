@@ -153,7 +153,7 @@ function review() {
 
 function settings() {
   const br = el('input', { placeholder: 'https://dein-pc.tailnet.ts.net', value: S.bridge });
-  const tk = el('input', { type: 'password', placeholder: 'Token aus bridge/token.txt', value: S.token });
+  const tk = el('input', { type: 'password', placeholder: 'BRIDGE_TOKEN aus bridge/.env', value: S.token });
   const msg = el('p', { class: 'mut' });
   show(back(), el('h1', {}, 'Einstellungen'),
     el('h2', {}, 'Adresse der PC-Brücke'), br,

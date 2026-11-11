@@ -8,7 +8,17 @@ PORT = 8787
 ORIGIN = "https://mircoak.github.io"
 OLLAMA_MODEL = "qwen2.5:7b"
 WHISPER_MODEL = "large-v3-turbo"
-TOKEN = open(os.path.join(HERE, "token.txt")).read().strip()  # nicht im Repo, siehe .gitignore
+def _env():  # .env liegt neben server.py, steht in .gitignore. Zeilen: BRIDGE_TOKEN=...
+    try:
+        lines = open(os.path.join(HERE, ".env"), encoding="utf-8").read().splitlines()
+    except FileNotFoundError:
+        return {}
+    return dict(l.split("=", 1) for l in (x.strip() for x in lines) if "=" in l and not l.startswith("#"))
+
+
+TOKEN = os.environ.get("BRIDGE_TOKEN") or _env().get("BRIDGE_TOKEN", "").strip().strip("\"'")
+if len(TOKEN) < 16:
+    sys.exit("BRIDGE_TOKEN fehlt oder ist zu kurz (min. 16 Zeichen). In bridge/.env eintragen.")
 
 # CUDA-DLLs aus den pip-Paketen (nvidia-cublas/cudnn) auffindbar machen
 for d in glob.glob(os.path.join(sys.prefix, "Lib", "site-packages", "nvidia", "*", "bin")):
